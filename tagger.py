@@ -1,13 +1,12 @@
+import pdb
 import json
 import subprocess
-from typing import BinaryIO, Iterable, Mapping, Tuple, Callable
+from typing import BinaryIO, Iterable, Mapping, Tuple, Callable, Any
 import numpy as np
 
-class Vector(np.ndarray):
-    """1D array of floats"""
-    __init__: Callable[[Iterable[float]], None]
-
-
+# class Vector(np.ndarray):
+# __init__: Callable[[Vector, Iterable[float]], None]
+Vector = Any # np.ndarray  # Array[float]
 W2V = Mapping[str, Vector]
 RawData = Mapping[str, str]
 Data = Mapping[Vector, str]
@@ -16,7 +15,7 @@ Data = Mapping[Vector, str]
 def parse_glove(f: BinaryIO) -> Mapping[str, Vector]:
     with f as lines:
         w2v = {
-            line.split()[0].decode("utf-8"): Vector(map(float, (line.split()[1:])))
+            line.split()[0].decode("utf-8"): np.array([float(n) for n in line.split()[1:]])
             for line in lines
         }
         return w2v
@@ -24,7 +23,7 @@ def parse_glove(f: BinaryIO) -> Mapping[str, Vector]:
 
 def vectorize(w2v: Mapping[str, Vector], document: str) -> Vector:
     vectors = [w2v[word] for word in document.split() if word in w2v]
-    mean = Vector(np.mean(vectors or np.zeros(len(next(iter(w2v.values())))), axis=0))
+    mean = np.array(np.mean(vectors or np.zeros(len(next(iter(w2v.values())))), axis=0))
     return mean
 
 
@@ -43,20 +42,24 @@ def suggest_tags(w2v: W2V, data: Data, text: str) -> str:
 
 def main() -> None:
     try:
-        f = open("glove.6B.50d.txt", "rb")
+        w2v = parse_glove(open("glove.6B.50d.txt", "rb"))
+        print("loaded w2v")
     except FileNotFoundError:
         subprocess.call(["wget", "http://nlp.stanford.edu/data/glove.6B.zip"])
         subprocess.call(["unzip", "glove.6B.zip"])
-        f = open("love.6B.50d.zip", "rb")
-    w2v = parse_glove(f)
+        w2v = parse_glove(open("love.6B.50d.txt", "rb"))
+        print("downloaded w2v")
     try:
         train = json.load(open("train.json"))
+        print("loaded training set")
     except FileNotFoundError:
         raw = json.load(open("raw.json"))
-        train = {vectorize(w2v, text): tags for text, tags in raw}
+        train = {vectorize(w2v, text): tags for text, tags in raw.items()}
         json.dump(train, open("train.json", "w"))
+        print("vectorized training set")
     try:
         user = json.load(open("user.json"))
+        print("loaded user data set")
     except FileNotFoundError:
         user = {}
     data = {**train, **user}
@@ -72,3 +75,7 @@ def main() -> None:
             user[vector] = data[vector] = real_tags
     finally:
         json.dump(user, open("user.json", "w"))
+
+
+if __name__ == "__main__":
+    main()
